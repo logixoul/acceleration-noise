@@ -44,20 +44,13 @@ Array2D<Complexf> getFdKernel(ivec2 size) {
 	return fdKernel;
 }
 Array2D<float> convolveLongtail(Array2D<float> in) {
-	/*static*/ Array2D<Complexf> fdKernel = getFdKernel(in.Size());
+	static Array2D<Complexf> fdKernel = getFdKernel(in.Size());
 	auto inChanFd = fft(in, FFTW_MEASURE);
 	//renderComplexImg(inChanFd);
 	forxy(inChanFd) {
 		auto p2 = p; if (p2.x > in.w / 2)p2.x -= in.w; if (p2.y > in.h / 2)p2.y -= in.h;
 		inChanFd(p) *= fdKernel(p);
-		//if(p != ivec2())
-			//inChanFd(p) /= 10.0f + sqrt(length(p2));
-		//inChanFd(p) *= .1f;
-		//inChanFd(p) *= expf(-.01*p2.lengthSquared());
-		//if(p2.length() > 10)
-		//	inChanFd(p) *= 0.0f;
 	}
-	//renderComplexImg(fdKernel);
 	return ifft(inChanFd, FFTW_MEASURE);
 }
 Array2D<vec3> convolveLongtail(Array2D<vec3> in) {
@@ -77,6 +70,7 @@ struct SApp : App {
 		enableDenormalFlushToZero();
 		disableGLReadClamp();
 		reset();
+		
 
 		stefanfw::eventHandler.subscribeToEvents(*this);
 	}
@@ -115,7 +109,11 @@ struct SApp : App {
 		forxy(img) {
 			imgChange(p) += imgChangeAcc(p);
 			img(p) += imgChange(p);
+			img(p) *= .99f;
+			imgChange(p) *= .99f;
 		}
+		//imgChange = to01(imgChange);
+		
 		//img = ::gauss3(img);
 		//auto imgChangeB = ::gauss3(imgChange);
 		//imgChange = imgChangeB;
@@ -126,10 +124,11 @@ struct SApp : App {
 		}
 		static int t = 0;
 		if (t++ % 100 == 0) {
+			cout << " hey " << endl;
 			forxy(img)
 			{
 				imgChangeAcc(p) = ::randFloat() * 2 - 1;
-				imgChangeAcc(p) *= .001f;
+				imgChangeAcc(p) *= 10.f;
 			}
 		}
 	}
@@ -137,14 +136,12 @@ struct SApp : App {
 	{
 		gl::clear(Color(0, 0, 0));
 
-		auto imgRGB = ::merge(vector<Array2D<float> >{img, img, img});
-		auto img2 = convolveLongtail(imgRGB);
-		auto img2R = split(img2)[0];
+		auto img2R = convolveLongtail(img);
 		img2R = ::to01(img2R); // TODO this shouldn't be necessary
 		//mm("img2R", img2R);
 
 		auto tex = gtex(img2R);
-		if(0)tex = shade2(tex,
+		if(keys['t'])tex = shade2(tex,
 			"float f = fetch1();"
 			"float fw = fwidth(f);"
 			"f = smoothstep(.5 - fw / 2, 0.5 + fw / 2, f);"
@@ -167,17 +164,6 @@ struct SApp : App {
 	gl::TextureRef redToLuminance(gl::TextureRef in) {
 		return shade2(in, "float f = fetch1(); _out.rgb=vec3(f);", ShadeOpts().ifmt(GL_RGB8));
 	}
-	/*float s1(float f) { return .5f + .5f * sin(f); }
-	float expRange(float f, float val0, float val1) { return exp(lmap(f, 0.0f, 1.0f, log(val0), log(val1))); }
-	void to01(Array2D<float> data)
-	{
-		float min_ = *std::min_element(data.begin(), data.end());
-		float max_ = *std::max_element(data.begin(), data.end());
-		forxy(data)
-		{
-			data(p) = lmap(data(p), min_, max_, 0.0f, 1.0f);
-		}
-	}*/
 };
 
 class CrossThreadCallQueue* gMainThreadCallQueue;
@@ -185,5 +171,5 @@ CINDER_APP(SApp, RendererGl(),
 	[&](ci::app::App::Settings *settings)
 {
 	//bool developer = (bool)ifstream(getAssetPath("developer"));
-	settings->setConsoleWindowEnabled(true);
+	//settings->setConsoleWindowEnabled(true);
 })

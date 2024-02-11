@@ -25,12 +25,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 typedef unsigned char byte;
 
-template< typename T >
+/*template< typename T >
 struct array_deleter
 {
 	void operator ()(T const * p)
 	{
-		delete[] p;
+		//delete[] p;
+		fftwf_free(const_cast<T*>(p));
 	}
 };
 
@@ -42,6 +43,57 @@ public:
 	ArrayDeleter(T* arrayPtr) {
 		sp = std::shared_ptr<T>(arrayPtr, array_deleter<T>());
 	}
+};*/
+
+template<class T>
+class ArrayDeleter
+{
+public:
+	ArrayDeleter(T* arrayPtr)
+	{
+		refcountPtr = new int(0);
+		(*refcountPtr)++;
+
+		this->arrayPtr = arrayPtr;
+	}
+
+	ArrayDeleter(ArrayDeleter const& other)
+	{
+		arrayPtr = other.arrayPtr;
+		refcountPtr = other.refcountPtr;
+		(*refcountPtr)++;
+	}
+
+	ArrayDeleter const& operator=(ArrayDeleter const& other)
+	{
+		reduceRefcount();
+
+		arrayPtr = other.arrayPtr;
+		refcountPtr = other.refcountPtr;
+		(*refcountPtr)++;
+
+		return *this;
+	}
+
+	~ArrayDeleter()
+	{
+		reduceRefcount();
+	}
+
+private:
+	void reduceRefcount()
+	{
+		(*refcountPtr)--;
+		if (*refcountPtr == 0)
+		{
+			delete refcountPtr;
+			//delete[] array;
+			fftwf_free(arrayPtr);
+		}
+	}
+
+	int* refcountPtr;
+	T* arrayPtr;
 };
 
 enum nofill {};
@@ -140,8 +192,8 @@ private:
 	}
 	T* Init(int w, int h) {
 		// fftwf_malloc so we can use "new-array execute" fftw functions
-		//auto data = (T*)fftwf_malloc(w * h * sizeof(T));
-		auto data = new T[w * h];
+		auto data = (T*)fftwf_malloc(w * h * sizeof(T));
+		//auto data = new T[w * h];
 		Init(w, h, data);
 		return data;
 	}
